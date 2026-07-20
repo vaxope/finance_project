@@ -25,6 +25,8 @@ def fetch_prices(ticker, start="2023-01-01", end=None):
 
 if __name__ == "__main__":
     tickers = get_sp500_tickers()
+    etfs = ['SPY', 'QQQ', 'VOO'] # ETFs not included, so manually adding, will change later
+    tickers = etfs + tickers
     df = fetch_prices(tickers)
     df.to_parquet("data/raw_prices.parquet")
     print(f"Saved {df.shape[0]} rows for {len(tickers)} tickers")
