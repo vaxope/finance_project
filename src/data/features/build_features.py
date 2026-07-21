@@ -13,7 +13,7 @@ def load_prices_long(path: str, tickers: list[str]) -> pd.DataFrame:
     for t in tickers:
         sub = wide[t].copy()                              
         sub['ticker'] = t                                  
-        sub = sub.reset_index().rename(columns={'Date': 'date', 'Close': 'close'})  
+        sub = sub.reset_index().rename(columns={'Date': 'date', 'Close': 'close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume': 'volume'})  
         frames.append(sub)
     return pd.concat(frames, ignore_index=True)             
 
@@ -39,4 +39,29 @@ def add_lagged_returns(df: pd.DataFrame, lags: list[int] = [1, 5, 10, 20], price
 
     return df
 
-        
+def add_rolling_volatility(df: pd.DataFrame, windows: list[int] = [5, 10, 20], return_col: str = 'log_return') -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values(by=['ticker', 'date'])
+
+    for w in windows:
+        col_name = f'vol_{w}d'
+
+        df[col_name] = df.groupby('ticker')[return_col].transform(
+            lambda x: x.rolling(window=w).std() * np.sqrt(252)
+        )
+    
+    return df
+
+# Rolling z score based on close
+def add_rolling_z_score(df: pd.DataFrame, windows: list[int] = [10, 20, 60], return_col: str = 'close') -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values(by=['ticker', 'date'])
+
+    for w in windows:
+        price_col = f'z_{w}d'
+
+        df[price_col] = df.groupby('ticker')[return_col].transform(
+            lambda x: (x-x.rolling(window=w).mean())/(x.rolling(window=w).std())
+        )
+    
+    return df
