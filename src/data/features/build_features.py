@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from pathlib import Path
-import talib
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
@@ -14,7 +13,7 @@ def load_prices_long(path: str, tickers: list[str]) -> pd.DataFrame:
     for t in tickers:
         sub = wide[t].copy()                              
         sub['ticker'] = t                                  
-        sub = sub.reset_index().rename(columns={'Date': 'date', 'Close': 'close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume': 'volume'})  
+        sub = sub.reset_index().rename(columns={'Price': 'price', 'Date': 'date', 'Close': 'close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume': 'volume'})  
         frames.append(sub)
     return pd.concat(frames, ignore_index=True)             
 
@@ -69,19 +68,22 @@ def add_rolling_z_score(df: pd.DataFrame, windows: list[int] = [10, 20, 60], ret
     return df
 
 # Adds RSI to df with different windows
-def add_rsi(df: pd.DataFrame, windows: list[int] = [9, 7, 14, 25], return_col: str = 'close') -> pd.DataFrame:
-    delta = df['close'].diff(1)
+def add_rsi(df: pd.DataFrame, windows: list[int] = [9, 7, 14, 25],  price_col: str = 'close') -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values(by=['ticker', 'date'])
+
+    delta = df.groupby('ticker')[price_col].diff(1)
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
 
     for w in windows:
         col_name = f'rsi_{w}d'
-        
+
         avg_gain = gain.groupby(df['ticker']).transform(lambda x: x.ewm(com=w-1, adjust=False).mean())
         avg_loss = loss.groupby(df['ticker']).transform(lambda x: x.ewm(com=w-1, adjust=False).mean())
-
-        df[col_name] = df.groupby('ticker')[return_col].transform(
-            lambda x: 100 - (100 / (1 + (avg_gain / avg_loss)))
-        )
+        rs = avg_gain / avg_loss
+        
+        df[col_name] = 100 - (100 / (1 + rs))
 
     return df
+
