@@ -47,6 +47,7 @@ def test_lagged_return_calc():
         'close': [100.0, 110.0, 121.0, 133.1] # 10% increase each day
     })
 
+    df = add_log_returns(df)
     result = add_lagged_returns(df, lags=[1, 2])
 
     # First row for 1d should NA and first two should be NA for 2d lag
@@ -75,3 +76,45 @@ def test_lagged_return_cross_ticker_leakage():
 
     bbb_second_row = result[result['ticker'] == 'BBB'].iloc[1]
     assert np.isclose(bbb_second_row['return1d'], np.log(30.0 / 25.0))
+
+def test_rolling_volatility_calc():
+    df = pd.DataFrame({
+        'ticker': ['AAA', 'AAA', 'AAA', 'AAA', 'AAA'],
+        'date': pd.date_range('2023-01-01', periods=5),
+        'close': [100.0, 110.0, 121.0, 133.1, 150.0] 
+    })
+    
+    df = add_log_returns(df)
+    result = add_rolling_volatility(df, windows=[1, 2])
+
+    # vol_1 should all be na because std has a denominator of n - 1, and 1 - 1 = 0
+    assert pd.isna(result["vol_1d"].iloc[0])
+    assert pd.isna(result["vol_1d"].iloc[1])
+    assert pd.isna(result["vol_1d"].iloc[2])
+    assert pd.isna(result["vol_1d"].iloc[3])
+    assert pd.isna(result["vol_1d"].iloc[4])
+
+    # Row 0 has no return and row 1 has 1 return, so both should be empty
+    assert pd.isna(result["vol_2d"].iloc[0])
+    assert pd.isna(result["vol_2d"].iloc[1])
+
+    assert np.isclose(result["vol_2d"].iloc[2], 0.0, atol=1e-9)
+    assert np.isclose(result["vol_2d"].iloc[3], 0.0, atol=1e-9)
+    
+    expected_vol = (np.abs(np.log(133.1/121.0)-np.log(150.0/133.1))/np.sqrt(2)) * np.sqrt(252)
+    assert np.isclose(result["vol_2d"].iloc[4], expected_vol, atol=1e-6) 
+
+def test_rolling_volatility_cross_ticker_leakage():
+    df = pd.DataFrame({
+        'ticker': ['AAA', 'AAA', 'AAA', 'BBB', 'BBB', 'BBB'],
+        'date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-01', '2023-01-02', '2023-01-03']),
+        'close': [100.0, 110.0, 121.0, 50.0, 55.0, 60.5] 
+    })
+    
+    df = add_log_returns(df)
+    result = add_rolling_volatility(df, windows=[2])
+    
+    bbb_rows = result[result['ticker'] == 'BBB']
+    assert pd.isna(bbb_rows["vol_2"].iloc[0])
+    assert pd.isna(bbb_rows["vol_2"].iloc[1])
+    assert np.isclose(bbb_rows["vol_2"].iloc[2], 0.0, atol=1e-9)
