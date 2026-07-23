@@ -115,6 +115,88 @@ def test_rolling_volatility_cross_ticker_leakage():
     result = add_rolling_volatility(df, windows=[2])
     
     bbb_rows = result[result['ticker'] == 'BBB']
-    assert pd.isna(bbb_rows["vol_2"].iloc[0])
-    assert pd.isna(bbb_rows["vol_2"].iloc[1])
-    assert np.isclose(bbb_rows["vol_2"].iloc[2], 0.0, atol=1e-9)
+    assert pd.isna(bbb_rows["vol_2d"].iloc[0])
+    assert pd.isna(bbb_rows["vol_2d"].iloc[1])
+    assert np.isclose(bbb_rows["vol_2d"].iloc[2], 0.0, atol=1e-9)
+
+def test_rolling_z_score_calc():
+    df = pd.DataFrame({
+            'ticker': ['AAA', 'AAA', 'AAA', 'AAA', 'AAA'],
+            'date': pd.date_range('2023-01-01', periods=5),
+            'close': [100.0, 110.0, 121.0, 133.1, 150.0] 
+        })
+
+    df = add_log_returns(df)
+    result = add_rolling_z_score(df, windows=[1, 2])
+
+    # z_1d should all be na because std has a denominator of n - 1, and X - mean = 0 and 0/0=nan
+    assert pd.isna(result["z_1d"].iloc[0])
+    assert pd.isna(result["z_1d"].iloc[1])
+    assert pd.isna(result["z_1d"].iloc[2])
+    assert pd.isna(result["z_1d"].iloc[3])
+    assert pd.isna(result["z_1d"].iloc[4])
+
+    # 2 day lookback window means first is nan
+    assert pd.isna(result["z_2d"].iloc[0])
+    
+    assert np.isclose(result["z_2d"].iloc[1], 1 / np.sqrt(2), atol=1e-6)
+    assert np.isclose(result["z_2d"].iloc[2], 1 / np.sqrt(2), atol=1e-6)
+    assert np.isclose(result["z_2d"].iloc[3], 1 / np.sqrt(2), atol=1e-6) 
+    
+    assert np.isclose(result["z_2d"].iloc[4], 1 / np.sqrt(2), atol=1e-6)
+
+def test_rolling_z_score_cross_ticker_leakage():
+    df = pd.DataFrame({
+        'ticker': ['AAA', 'AAA', 'AAA', 'BBB', 'BBB', 'BBB'],
+        'date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-01', '2023-01-02', '2023-01-03']),
+        'close': [100.0, 110.0, 121.0, 50.0, 55.0, 65.0]
+    })
+    df = add_log_returns(df)
+    result = add_rolling_z_score(df, windows=[2])
+    
+
+    bbb_rows = result[result['ticker'] == 'BBB']
+    
+    assert pd.isna(bbb_rows["z_2d"].iloc[0])
+    assert np.isclose(bbb_rows["z_2d"].iloc[1], 0.70710678, atol=1e-6)    
+    assert pd.isna(bbb_rows["z_2d"].iloc[2]) == False 
+
+def test_rsi_calc():
+    df = pd.DataFrame({
+        'ticker': ['AAA', 'AAA', 'AAA', 'AAA', 'AAA'],
+        'date': pd.date_range('2023-01-01', periods=5),
+        'close': [100.0, 110.0, 121.0, 133.1, 150.0]
+    })
+    
+    result = add_rsi(df, windows=[1, 2])
+    
+
+    assert pd.isna(result["rsi_1d"].iloc[0])
+
+    assert np.isclose(result["rsi_1d"].iloc[1], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_1d"].iloc[2], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_1d"].iloc[3], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_1d"].iloc[4], 100.0, atol=1e-6)
+    
+    assert pd.isna(result["rsi_2d"].iloc[0])
+
+    assert np.isclose(result["rsi_2d"].iloc[1], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_2d"].iloc[2], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_2d"].iloc[3], 100.0, atol=1e-6)
+    assert np.isclose(result["rsi_2d"].iloc[4], 100.0, atol=1e-6)
+
+def test_rsi_cross_ticker_leakage():
+    df = pd.DataFrame({
+        'ticker': ['AAA', 'AAA', 'BBB', 'BBB'],
+        'date': pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-01', '2023-01-02']),
+        'close': [100.0, 110.0, 200.0, 50.0] # AAA goes up, BBB goes down
+    })
+    
+    result = add_rsi(df, windows=[1])
+    
+    bbb_rows = result[result['ticker'] == 'BBB']
+    
+    assert pd.isna(bbb_rows["rsi_1d"].iloc[0])
+    assert np.isclose(bbb_rows["rsi_1d"].iloc[1], 0.0, atol=1e-6)
+
+
